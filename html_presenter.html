@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTML Presenter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #111831;
+      --text: #eef3ff;
+      --muted: #a9b7d9;
+      --accent: #6ea8fe;
+      --accent2: #8ef0c2;
+      --border: #1e293b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+
+    /* ── Landing / File Loader ─────────────────────────── */
+    #landing {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100vh; gap: 1.5rem; text-align: center;
+    }
+    #landing h1 { font-size: 2.4rem; font-weight: 800; }
+    #landing h1 span {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    #landing p { color: var(--muted); font-size: 1.1rem; max-width: 36rem; line-height: 1.5; }
+    #dropZone {
+      width: 440px; height: 220px; border: 2px dashed var(--border); border-radius: 24px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 0.8rem; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+    }
+    #dropZone:hover, #dropZone.over { border-color: var(--accent); background: rgba(110,168,254,0.06); }
+    #dropZone svg { width: 48px; height: 48px; stroke: var(--muted); fill: none; stroke-width: 1.5; }
+    #dropZone .label { color: var(--muted); font-size: 0.95rem; }
+    #dropZone .label strong { color: var(--accent); cursor: pointer; }
+    #fileInput { display: none; }
+    .shortcut-hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.5rem; opacity: 0.7; }
+
+    /* ── Main Display ──────────────────────────────────── */
+    #mainDisplay { display: none; width: 100vw; height: 100vh; position: relative; background: #000; }
+    #mainFrame { width: 100%; height: 100%; border: 0; background: #000; }
+
+    /* Blackout overlay (on top of iframe, preserves JS state) */
+    #blackoutOverlay {
+      display: none; position: absolute; inset: 0; background: #000; z-index: 15;
+    }
+
+    /* Progress bar */
+    #mainProgress {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
+      background: rgba(255,255,255,0.04); z-index: 10;
+    }
+    #mainProgressBar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.3s ease;
+    }
+
+    /* Laser dot */
+    #laserDot {
+      display: none; position: absolute; width: 24px; height: 24px; border-radius: 50%;
+      background: rgba(239,68,68,0.9); box-shadow: 0 0 18px 6px rgba(239,68,68,0.5);
+      pointer-events: none; z-index: 20; transform: translate(-50%, -50%);
+      animation: laserPulse 1s ease-in-out infinite;
+    }
+    @keyframes laserPulse {
+      0%, 100% { box-shadow: 0 0 18px 6px rgba(239,68,68,0.5); }
+      50% { box-shadow: 0 0 24px 10px rgba(239,68,68,0.7); }
+    }
+
+    /* ── Floating Control Bar (main display) ────────── */
+    #controlBar {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(10, 14, 28, 0.88);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 6px 10px;
+      z-index: 30;
+      opacity: 0; transition: opacity 0.35s ease;
+      pointer-events: none;
+      user-select: none;
+    }
+    #controlBar.visible { opacity: 1; pointer-events: auto; }
+
+    .ctrl-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 10px;
+      background: transparent; border: none; cursor: pointer;
+      color: var(--muted); transition: background 0.15s, color 0.15s;
+    }
+    .ctrl-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+    .ctrl-btn:active { background: rgba(255,255,255,0.12); }
+    .ctrl-btn.on { color: var(--red); }
+    .ctrl-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .ctrl-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.08); margin: 0 2px; flex-shrink: 0; }
+
+    #slideCounter {
+      font-size: 0.82rem; font-weight: 600; color: var(--muted);
+      padding: 0 8px; white-space: nowrap; min-width: 56px; text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Edge arrows */
+    .edge-arrow {
+      position: absolute; top: 0; width: 60px; height: 100%;
+      display: flex; align-items: center; z-index: 25; cursor: pointer;
+      opacity: 0; transition: opacity 0.25s;
+    }
+    .edge-arrow:hover { opacity: 1; }
+    .edge-arrow-left { left: 0; justify-content: flex-start; padding-left: 12px; }
+    .edge-arrow-right { right: 0; justify-content: flex-end; padding-right: 12px; }
+    .edge-arrow-icon {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(10,14,28,0.7); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); transition: background 0.15s, color 0.15s;
+    }
+    .edge-arrow:hover .edge-arrow-icon { background: rgba(10,14,28,0.9); color: var(--text); }
+    .edge-arrow-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Help overlay */
+    #helpOverlay {
+      display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.85);
+      z-index: 50; align-items: center; justify-content: center;
+    }
+    #helpOverlay.show { display: flex; }
+    #helpBox {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
+      padding: 2rem 2.5rem; max-width: 480px; width: 90%;
+    }
+    #helpBox h2 { font-size: 1.2rem; margin-bottom: 1rem; color: var(--accent); }
+    #helpBox table { width: 100%; font-size: 0.88rem; }
+    #helpBox td { padding: 0.3rem 0; }
+    #helpBox td:first-child { color: var(--accent2); font-family: ui-monospace, monospace; width: 50%; }
+    #helpBox td:last-child { color: var(--muted); }
+    #helpClose {
+      margin-top: 1rem; background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted); padding: 6px 16px; cursor: pointer;
+      font-family: inherit; font-size: 0.82rem;
+    }
+    #helpClose:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    /* ── Presenter Window ──────────────────────────────── */
+    body.presenter-mode { overflow: auto; }
+    #presenterView { display: none; height: 100vh; }
+    body.presenter-mode #presenterView { display: grid; grid-template-rows: 1fr auto auto; }
+
+    .pres-main {
+      display: grid; grid-template-columns: 1.2fr 6px 0.8fr;
+      padding: 10px 10px 0; min-height: 0;
+    }
+    .pres-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-right: 5px; }
+    .pres-right { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-left: 5px; }
+    .pres-divider {
+      width: 6px; cursor: col-resize; position: relative; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pres-divider::after {
+      content: ''; width: 3px; height: 40px; border-radius: 2px;
+      background: rgba(255,255,255,0.12); transition: background 0.15s, height 0.15s;
+    }
+    .pres-divider:hover::after, .pres-divider.dragging::after {
+      background: var(--accent); height: 60px;
+    }
+
+    .pres-panel {
+      background: #0d1117; border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px; display: flex; flex-direction: column; min-height: 0;
+    }
+    .pres-panel h3 {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; flex-shrink: 0;
+    }
+    .pres-slide-frame {
+      width: 100%; aspect-ratio: 16/9; border: 0; border-radius: 8px;
+      background: #000; flex-shrink: 0;
+    }
+    .pres-current-panel { flex: 1; }
+    .pres-current-panel .pres-slide-frame { aspect-ratio: auto; flex: 1; height: 0; min-height: 200px; }
+
+    /* Fixed-resolution presenter iframes: render at native size, CSS-scale to fit */
+    .pres-scale-wrap {
+      position: relative; overflow: hidden; border-radius: 8px; background: #000;
+    }
+    .pres-scale-wrap iframe {
+      width: 1280px; height: 720px; border: 0;
+      transform-origin: 0 0; position: absolute; top: 0; left: 0;
+    }
+
+    #presNotes {
+      flex: 1; overflow-y: auto; color: #ddd; font-size: 0.92rem; line-height: 1.55;
+      white-space: pre-wrap; padding: 4px 2px; min-height: 60px;
+    }
+    #presAnnotation {
+      width: 100%; background: #0a0e18; border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: inherit; font-size: 0.82rem; padding: 6px 8px;
+      resize: vertical; min-height: 36px; max-height: 120px; margin-top: 4px;
+    }
+    #presAnnotation:focus { border-color: var(--accent); outline: none; }
+
+    /* Thumbnail strip */
+    .pres-thumbs {
+      display: flex; gap: 6px; padding: 8px 10px; overflow-x: auto;
+      background: #080c18; border-top: 1px solid var(--border);
+      scroll-snap-type: x mandatory; flex-shrink: 0;
+    }
+    .pres-thumb {
+      flex: 0 0 120px; height: 68px; border-radius: 6px; border: 2px solid transparent;
+      background: #111; cursor: pointer; position: relative; scroll-snap-align: center;
+      overflow: hidden; transition: border-color 0.15s;
+    }
+    .pres-thumb.active { border-color: var(--accent); }
+    .pres-thumb iframe {
+      width: 960px; height: 540px; border: 0; pointer-events: none;
+      transform: scale(0.125); transform-origin: 0 0;
+    }
+    .pres-thumb-num {
+      position: absolute; bottom: 2px; right: 4px; font-size: 9px; font-weight: 700;
+      color: rgba(255,255,255,0.7); text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* Presenter status bar */
+    .pres-status {
+      display: flex; align-items: center; gap: 12px; padding: 6px 12px;
+      background: #060a14; border-top: 1px solid var(--border);
+      font-size: 0.78rem; color: var(--muted); flex-shrink: 0;
+    }
+    .pres-status .timer {
+      font-family: ui-monospace, 'SF Mono', monospace; font-size: 1rem;
+      color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums;
+    }
+    .pres-status .slide-num { color: var(--accent); font-weight: 600; }
+    .pres-status .clock { margin-left: auto; color: var(--muted); font-family: ui-monospace, monospace; }
+    .pres-btn {
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); padding: 3px 10px; cursor: pointer; font-size: 0.75rem;
+      font-family: inherit; transition: background 0.15s, color 0.15s;
+    }
+    .pres-btn:hover { background: rgba(110,168,254,0.15); color: var(--accent); }
+    .pres-btn.on { background: rgba(239,68,68,0.18); border-color: var(--red); color: var(--red); }
+    #gotoInput {
+      width: 36px; background: #0a0e18; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); text-align: center; font-family: inherit; font-size: 0.78rem; padding: 2px;
+    }
+    #gotoInput:focus { border-color: var(--accent); outline: none; }
+
+    @media (max-width: 900px) {
+      .pres-main { grid-template-columns: 1fr !important; }
+      .pres-divider { display: none; }
+      .pres-left, .pres-right { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Landing -->
+  <div id="landing">
+    <h1><span>HTML</span> Presenter</h1>
+    <p>Open any HTML slide deck and present with dual-screen support, speaker notes, timer, annotations, and slide thumbnails.</p>
+    <div id="dropZone">
+      <svg viewBox="0 0 48 48"><path d="M24 6v28M14 24l10 10 10-10" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 36v4a2 2 0 002 2h32a2 2 0 002-2v-4" stroke-linecap="round"/></svg>
+      <div class="label">Drop HTML file here or <strong id="browseLink">browse</strong></div>
+    </div>
+    <input type="file" id="fileInput" accept=".html,.htm" />
+    <div class="shortcut-hint">Drag to projector &rarr; F for fullscreen &rarr; P for presenter view</div>
+  </div>
+
+  <!-- Main Display -->
+  <div id="mainDisplay">
+    <iframe id="mainFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+
+    <!-- Blackout overlay (preserves iframe JS state) -->
+    <div id="blackoutOverlay"></div>
+
+    <!-- Edge arrows -->
+    <div class="edge-arrow edge-arrow-left" id="edgePrev" title="Previous slide">
+      <div class="edge-arrow-icon">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+    </div>
+    <div class="edge-arrow edge-arrow-right" id="edgeNext" title="Next slide">
+      <div class="edge-arrow-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+    </div>
+
+    <!-- Floating control bar -->
+    <div id="controlBar">
+      <button class="ctrl-btn" id="btnPrev" title="Previous slide (Left arrow)">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span id="slideCounter">1 / 1</span>
+      <button class="ctrl-btn" id="btnNext" title="Next slide (Right arrow)">
+        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <div class="ctrl-divider"></div>
+      <button class="ctrl-btn" id="btnFullscreen" title="Fullscreen (F)">
+        <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+      </button>
+      <button class="ctrl-btn" id="btnPresenter" title="Presenter view (P)">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+      </button>
+      <button class="ctrl-btn" id="btnBlackout" title="Black screen (B)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2m-9-11h2m18 0h2m-3.64-6.36l-1.41 1.41M6.05 17.95l-1.41 1.41m0-12.73l1.41 1.41m11.31 11.31l1.41 1.41"/></svg>
+      </button>
+      <div class="ctrl-divider"></div>
+      <button class="ctrl-btn" id="btnHelp" title="Shortcuts (?)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>
+      </button>
+    </div>
+
+    <div id="mainProgress"><div id="mainProgressBar"></div></div>
+    <div id="laserDot"></div>
+
+    <!-- Display positioning hint (Mac audience popup) -->
+    <div id="displayHint" style="display:none;position:fixed;top:20px;left:50%;transform:translateX(-50%);
+      background:rgba(10,14,28,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 28px;z-index:100;
+      color:#a9b7d9;font-family:Inter,sans-serif;font-size:0.92rem;text-align:center;cursor:pointer;">
+      Drag to external display &rarr; press <strong style="color:#6ea8fe;">F</strong> to maximize &bull; <span style="opacity:0.5;">click to dismiss</span>
+    </div>
+
+    <!-- Help overlay -->
+    <div id="helpOverlay">
+      <div id="helpBox">
+        <h2>Keyboard Shortcuts</h2>
+        <table>
+          <tr><td>&rarr;  Space  PageDn</td><td>Next slide</td></tr>
+          <tr><td>&larr;  PageUp</td><td>Previous slide</td></tr>
+          <tr><td>Home / End</td><td>First / last slide</td></tr>
+          <tr><td>F</td><td>Fullscreen / maximize</td></tr>
+          <tr><td>P</td><td>Presenter + display (dual-screen)</td></tr>
+          <tr><td>B</td><td>Black screen</td></tr>
+          <tr><td>Escape</td><td>Close / exit fullscreen</td></tr>
+        </table>
+        <button id="helpClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Presenter View -->
+  <div id="presenterView">
+    <div class="pres-main">
+      <div class="pres-left">
+        <div class="pres-panel pres-current-panel">
+          <h3>Current Slide</h3>
+          <div id="presCurrentWrap" class="pres-scale-wrap" style="flex:1;min-height:0;">
+            <iframe id="presCurrent" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+            <div id="laserOverlay" style="display:none;position:absolute;inset:0;z-index:5;cursor:crosshair;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="pres-divider" id="presDivider"></div>
+      <div class="pres-right">
+        <div class="pres-panel" style="flex:0 0 auto;">
+          <h3>Next Slide</h3>
+          <div id="presNextWrap" class="pres-scale-wrap" style="aspect-ratio:16/9;">
+            <iframe id="presNext" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+          </div>
+        </div>
+        <div class="pres-panel" style="flex:1; min-height:0;">
+          <h3>Speaker Notes</h3>
+          <div id="presNotes">No notes for this slide.</div>
+        </div>
+        <div class="pres-panel" style="flex:0 0 auto;">
+          <h3>Annotations <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:0.6;">(saved per slide)</span></h3>
+          <textarea id="presAnnotation" placeholder="Add notes for this slide..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="pres-thumbs" id="presThumbStrip"></div>
+    <div class="pres-status">
+      <span class="timer" id="presTimer">00:00:00</span>
+      <span style="color:var(--border);">|</span>
+      <span>Slide: <span id="presSlideTimer" style="font-family:monospace;">00:00</span></span>
+      <span style="color:var(--border);">|</span>
+      <span class="slide-num" id="presSlideNum">1 / 1</span>
+      <span style="color:var(--border);">|</span>
+      <label style="display:flex;align-items:center;gap:4px;">Go to <input id="gotoInput" type="text" /></label>
+      <button class="pres-btn" id="laserBtn" title="Toggle laser pointer (L)">Laser</button>
+      <button class="pres-btn" id="blackoutBtn" title="Black screen (B)">Blackout</button>
+      <button class="pres-btn" id="presHelpBtn" title="Shortcuts (?)">?</button>
+      <span class="clock" id="presClock"></span>
+    </div>
+  </div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────────
+  let slides = [];          // { title, notes, previewHTML } for presenter previews
+  let fullHTML = '';         // Complete HTML string for main + presenter iframes
+  let iframeSlides = [];    // Live DOM elements inside the main iframe
+  let iframeReady = false;
+  let presIframeSlides = []; // Live DOM elements inside presenter's current slide iframe
+  let presIframeReady = false;
+  let index = 0;
+  let blackout = false;
+  let laserOn = false;
+  let presenterWindow = null;   // non-Mac: presenter popup
+  let displayWindow = null;     // Mac: audience display popup
+  let isPresenterMode = false;  // Mac: true when main window becomes presenter
+  let deckKey = '';
+  let startTime = null;
+  let slideStartTime = null;
+  let timerInterval = null;
+  let hideTimer = null;
+  let programmaticScroll = false;
+  let programmaticClick = false;
+
+  const isMac = /Mac/.test(navigator.platform) || /Mac/.test(navigator.userAgent);
+  const urlParams = new URLSearchParams(location.search);
+  const urlMode = urlParams.get('mode');
+  const isPresenter = urlMode === 'presenter';   // non-Mac: opened as presenter popup
+  const isDisplay   = urlMode === 'display';     // Mac: opened as audience popup
+  const deckParam   = urlParams.get('deck');      // shell-launched: auto-load deck URL
+
+  // BroadcastChannel for shell-launched mode (two independent --app windows, no opener)
+  const syncChannel = (() => {
+    try { return new BroadcastChannel('html-presenter-sync'); }
+    catch (_) { return null; }
+  })();
+
+  // ── File Loading ───────────────────────────────────────────
+  const landing  = document.getElementById('landing');
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  if (!isPresenter && !isDisplay) {
+    document.getElementById('browseLink').addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('over');
+      const file = e.dataTransfer.files[0];
+      if (file && /\.html?$/i.test(file.name)) loadFile(file);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) loadFile(fileInput.files[0]);
+    });
+  }
+
+  function loadFile(file) {
+    deckKey = 'presenter_' + file.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const reader = new FileReader();
+    reader.onload = () => {
+      fullHTML = reader.result;
+      extractSlideMetadata(fullHTML);
+      if (slides.length === 0) {
+        alert('No slides found. Expected <section class="slide"> elements.');
+        return;
+      }
+      startPresentation();
+    };
+    reader.readAsText(file);
+  }
+
+  // ── Slide Extraction ───────────────────────────────────────
+  // Parses the HTML to extract metadata (titles, notes) and static
+  // preview HTML for the presenter window. The main display loads
+  // the FULL original HTML to keep all JS interactivity alive.
+
+  function extractSlideMetadata(htmlString) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+    const headHTML = doc.head.innerHTML;
+
+    let sections = [...doc.querySelectorAll('section.slide')];
+    if (sections.length === 0) {
+      sections = [...doc.querySelectorAll('[class*="slide"]')].filter(el =>
+        (el.tagName === 'SECTION' || el.tagName === 'DIV') &&
+        !el.classList.contains('slide-counter') &&
+        !el.classList.contains('slide-nav')
+      );
+    }
+
+    slides = sections.map((s, i) => {
+      // Build a static preview for presenter thumbnails/previews
+      const clone = s.cloneNode(true);
+      clone.classList.add('active');
+      clone.style.display = 'flex';
+      clone.style.position = 'relative';
+      clone.style.width = '100vw';
+      clone.style.height = '100vh';
+      clone.style.overflow = 'hidden';
+      clone.style.scrollSnapAlign = 'none';
+
+      const title = s.dataset?.title
+        || s.querySelector('h1')?.textContent?.trim()
+        || s.querySelector('h2')?.textContent?.trim()
+        || 'Slide ' + (i + 1);
+
+      return {
+        index: i,
+        title: title.substring(0, 80),
+        notes: s.dataset?.notes || '',
+        html: buildPreviewSrcdoc(headHTML, clone.outerHTML),
+      };
+    });
+  }
+
+  function buildPreviewSrcdoc(headHTML, bodyHTML) {
+    // Static preview for presenter: visual only, no body-level scripts needed
+    return '<!doctype html><html><head><meta charset="utf-8">' + headHTML +
+      '<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;}' +
+      'main{overflow:visible!important;height:auto!important;scroll-snap-type:none!important;}' +
+      '::-webkit-scrollbar{display:none;}</style>' +
+      '</head><body>' + bodyHTML + '</body></html>';
+  }
+
+  // ── Start Presentation ─────────────────────────────────────
+  function startPresentation() {
+    landing.style.display = 'none';
+    document.getElementById('mainDisplay').style.display = 'block';
+    document.title = slides[0]?.title || 'Presenter';
+    index = 0;
+    startTime = Date.now();
+    slideStartTime = Date.now();
+
+    // Load the FULL original HTML into the main iframe.
+    // This preserves all JavaScript (Chart.js, simulations, etc).
+    const frame = document.getElementById('mainFrame');
+    frame.srcdoc = fullHTML;
+    frame.onload = () => setupIframe(frame);
+
+    updateUI();
+    initControlBar();
+  }
+
+  // ── Iframe Setup (after full HTML loads) ───────────────────
+  function setupIframe(frame) {
+    try {
+      const iDoc = frame.contentDocument || frame.contentWindow.document;
+
+      // Detect slides inside the loaded deck
+      iframeSlides = [...iDoc.querySelectorAll('section.slide')];
+      if (iframeSlides.length === 0) {
+        iframeSlides = [...iDoc.querySelectorAll('[class*="slide"]')].filter(el =>
+          (el.tagName === 'SECTION' || el.tagName === 'DIV') &&
+          !el.classList.contains('slide-counter') &&
+          !el.classList.contains('slide-nav')
+        );
+      }
+
+      iframeReady = true;
+
+      // Optionally hide the deck's own nav chrome
+      const ownCounter = iDoc.querySelector('.slide-counter');
+      if (ownCounter) ownCounter.style.display = 'none';
+
+      // Navigate to the current slide
+      navigateIframe(index);
+
+      // Detect user-initiated scrolling inside the iframe
+      const scroller = iDoc.querySelector('main') || iDoc.scrollingElement || iDoc.documentElement;
+      if (scroller) {
+        scroller.addEventListener('scroll', () => {
+          if (programmaticScroll) return;
+          const scrollTop = scroller.scrollTop;
+          const viewH = scroller.clientHeight;
+          let current = 0;
+          iframeSlides.forEach((s, i) => {
+            if (scrollTop >= s.offsetTop - viewH * 0.4) current = i;
+          });
+          if (current !== index) {
+            saveAnnotation();
+            index = current;
+            slideStartTime = Date.now();
+            updateUI();
+            syncOther({ type: 'goto', index: index });
+            if (isPresenter || isPresenterMode) updatePresenter();
+          }
+        });
+      }
+
+      // Forward keyboard events from inside the iframe to our handler
+      iDoc.addEventListener('keydown', (e) => {
+        // Let the deck handle its own simulation buttons/inputs naturally.
+        // Only forward navigation keys that we want to intercept.
+        const tag = e.target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+        const key = e.key.toLowerCase();
+
+        // F key: must handle directly here (not forwarded) because
+        // requestFullscreen needs a user gesture from this event context.
+        if (key === 'f') {
+          e.preventDefault();
+          toggleFullscreen();
+          return;
+        }
+
+        // Forward other specific keys to parent handler
+        if (key === 'p' || key === 'b' || key === '?' ||
+            key === 'escape' || key === 'l' || key === 'g') {
+          handleKeydown(e);
+        }
+      });
+
+      // Sync click events to the other window (so Play/Pause/Reset stay in sync)
+      iDoc.addEventListener('click', (e) => {
+        if (programmaticClick) return;
+        const vw = iDoc.documentElement.clientWidth || 1;
+        const vh = iDoc.documentElement.clientHeight || 1;
+        syncOther({
+          type: 'click-sync',
+          selector: getElementPath(e.target),
+          nx: e.clientX / vw,
+          ny: e.clientY / vh,
+        });
+      }, true);
+    } catch (err) {
+      console.warn('Could not access iframe content:', err);
+    }
+  }
+
+  function navigateIframe(idx) {
+    if (!iframeReady || !iframeSlides[idx]) return;
+    programmaticScroll = true;
+    iframeSlides[idx].scrollIntoView({ behavior: 'instant' });
+    // Allow scroll events to settle before re-enabling detection
+    setTimeout(() => { programmaticScroll = false; }, 250);
+  }
+
+  // ── UI Updates ─────────────────────────────────────────────
+  function updateUI() {
+    const pct = slides.length > 1 ? ((index + 1) / slides.length) * 100 : 100;
+    const bar = document.getElementById('mainProgressBar');
+    if (bar) bar.style.width = pct + '%';
+
+    const counter = document.getElementById('slideCounter');
+    if (counter) counter.textContent = (index + 1) + ' / ' + slides.length;
+
+    const bb = document.getElementById('btnBlackout');
+    if (bb) bb.classList.toggle('on', blackout);
+
+    const overlay = document.getElementById('blackoutOverlay');
+    if (overlay) overlay.style.display = blackout ? 'block' : 'none';
+  }
+
+  function go(delta) {
+    const newIndex = Math.max(0, Math.min(slides.length - 1, index + delta));
+    if (newIndex === index) return;
+    goTo(newIndex);
+  }
+
+  function goTo(newIndex) {
+    if (newIndex < 0 || newIndex >= slides.length) return;
+    if (newIndex === index && slides.length > 1) return;
+    saveAnnotation();
+    index = newIndex;
+    slideStartTime = Date.now();
+    blackout = false;
+    navigateIframe(index);
+    updateUI();
+    syncOther({ type: 'goto', index: index });
+    if (isPresenter || isPresenterMode) updatePresenter();
+  }
+
+  // ── Floating Control Bar ───────────────────────────────────
+  function initControlBar() {
+    const bar = document.getElementById('controlBar');
+    if (!bar) return;
+
+    function showBar() {
+      bar.classList.add('visible');
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => bar.classList.remove('visible'), 3000);
+    }
+
+    const mainDisplay = document.getElementById('mainDisplay');
+    mainDisplay.addEventListener('mousemove', showBar);
+    mainDisplay.addEventListener('mouseenter', showBar);
+
+    bar.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimer);
+      bar.classList.add('visible');
+    });
+    bar.addEventListener('mouseleave', () => {
+      hideTimer = setTimeout(() => bar.classList.remove('visible'), 2000);
+    });
+
+    // Show on load for 4s
+    showBar();
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => bar.classList.remove('visible'), 4000);
+
+    document.getElementById('btnPrev').addEventListener('click', () => go(-1));
+    document.getElementById('btnNext').addEventListener('click', () => go(1));
+    document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
+    document.getElementById('btnPresenter').addEventListener('click', openPresenter);
+    document.getElementById('btnBlackout').addEventListener('click', toggleBlackout);
+    document.getElementById('btnHelp').addEventListener('click', toggleHelp);
+    document.getElementById('helpClose').addEventListener('click', toggleHelp);
+
+    document.getElementById('edgePrev').addEventListener('click', () => go(-1));
+    document.getElementById('edgeNext').addEventListener('click', () => go(1));
+  }
+
+  function toggleFullscreen() {
+    if (isMac) {
+      // macOS: never use native fullscreen — it creates a Space that hides
+      // other Chrome windows (blanks the presenter on the laptop).
+      // Instead, maximize the window to fill the screen.
+      if (isDisplay || isPresenterMode) {
+        // Audience display popup: try to fill the screen it's currently on
+        window.moveTo(window.screenLeft ?? window.screenX ?? 0, window.screenTop ?? window.screenY ?? 0);
+        window.resizeTo(screen.availWidth, screen.availHeight);
+        // If on external display, position to that screen's origin
+        if (isOnDifferentScreen()) {
+          window.moveTo(screen.availLeft ?? 0, screen.availTop ?? 0);
+          window.resizeTo(screen.availWidth, screen.availHeight);
+        }
+      } else {
+        // Main window (before presenter mode): maximize on current screen
+        window.moveTo(0, 0);
+        window.resizeTo(screen.availWidth, screen.availHeight);
+      }
+      return;
+    }
+    // Non-Mac: native fullscreen is safe
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  // Detect if this popup is on a different physical screen than its opener
+  function isOnDifferentScreen() {
+    try {
+      if (!window.opener || window.opener.closed) return false;
+      const myX = window.screenLeft ?? window.screenX ?? 0;
+      const openerX = window.opener.screenLeft ?? window.opener.screenX ?? 0;
+      return Math.abs(myX - openerX) > screen.availWidth * 0.5;
+    } catch (_) { return false; }
+  }
+
+  // Try to position audience popup on external display via Screen Placement API
+  async function tryPositionOnExternal() {
+    try {
+      if ('getScreenDetails' in window) {
+        const details = await window.getScreenDetails();
+        const ext = details.screens.find(s => !s.isPrimary);
+        if (ext) {
+          window.moveTo(ext.left, ext.top);
+          window.resizeTo(ext.width, ext.height);
+          return;
+        }
+      }
+    } catch (_) {}
+    // Fallback: maximize on current screen
+    window.moveTo(0, 0);
+    window.resizeTo(screen.availWidth, screen.availHeight);
+  }
+
+  // Show brief hint in audience popup about positioning
+  function showDisplayHint() {
+    const hint = document.getElementById('displayHint');
+    if (!hint) return;
+    hint.style.display = 'block';
+    const dismiss = () => { hint.style.display = 'none'; };
+    setTimeout(dismiss, 8000);
+    hint.addEventListener('click', dismiss);
+  }
+
+  function toggleBlackout() {
+    blackout = !blackout;
+    updateUI();
+    syncOther({ type: 'blackout', active: blackout });
+    const btn = document.getElementById('blackoutBtn');
+    if (btn) btn.classList.toggle('on', blackout);
+  }
+
+  function toggleHelp() {
+    document.getElementById('helpOverlay')?.classList.toggle('show');
+  }
+
+  // ── Presenter View ─────────────────────────────────────────
+  function initPresenter() {
+    document.body.classList.add('presenter-mode');
+    document.getElementById('mainDisplay').style.display = 'none';
+    document.getElementById('presenterView').style.display = 'grid';
+
+    buildThumbnails();
+    timerInterval = setInterval(updateTimers, 1000);
+    updateTimers();
+
+    // Load full HTML into presenter's current slide iframe (preserves JS/animations)
+    const cur = document.getElementById('presCurrent');
+    if (fullHTML && cur) {
+      cur.srcdoc = fullHTML;
+      cur.onload = () => {
+        setupPresenterIframe(cur);
+        navigatePresenterIframe(index);
+        scaleAllPresIframes();
+      };
+    }
+
+    // Update everything else (notes, next slide, thumbnails, etc.)
+    updatePresenterMeta();
+    initPresDivider();
+    initPresScaling();
+
+    document.getElementById('presAnnotation').addEventListener('input', saveAnnotation);
+
+    const gotoInput = document.getElementById('gotoInput');
+    gotoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const n = parseInt(gotoInput.value);
+        if (n >= 1 && n <= slides.length) goTo(n - 1);
+        gotoInput.value = '';
+        gotoInput.blur();
+      }
+      e.stopPropagation();
+    });
+
+    document.getElementById('laserBtn').addEventListener('click', toggleLaser);
+    document.getElementById('blackoutBtn').addEventListener('click', () => {
+      blackout = !blackout;
+      syncOther({ type: 'blackout', active: blackout });
+      updateUI();
+      document.getElementById('blackoutBtn').classList.toggle('on', blackout);
+    });
+    document.getElementById('presHelpBtn').addEventListener('click', toggleHelp);
+    // Note: message listener is already attached globally (line below onMessage def)
+  }
+
+  // ── Fixed-resolution scaling for presenter iframes ────────
+  // Renders iframes at 1920x1080 and CSS-scales to fit the container.
+  // This prevents Chart.js and other responsive content from re-laying out
+  // when the divider is dragged or the window is resized.
+  const PRES_W = 1280, PRES_H = 720;
+
+  function scalePresIframe(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const w = wrap.clientWidth;
+    const h = wrap.clientHeight;
+    if (w === 0 || h === 0) return;
+    const scale = Math.min(w / PRES_W, h / PRES_H);
+    const iframe = wrap.querySelector('iframe');
+    if (iframe) {
+      iframe.style.transform = 'scale(' + scale + ')';
+      // Center vertically if aspect ratio doesn't match
+      const scaledH = PRES_H * scale;
+      iframe.style.top = Math.max(0, (h - scaledH) / 2) + 'px';
+      const scaledW = PRES_W * scale;
+      iframe.style.left = Math.max(0, (w - scaledW) / 2) + 'px';
+    }
+  }
+
+  function scaleAllPresIframes() {
+    scalePresIframe('presCurrentWrap');
+    scalePresIframe('presNextWrap');
+  }
+
+  function initPresScaling() {
+    scaleAllPresIframes();
+    // Re-scale when container resizes (divider drag, window resize)
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(scaleAllPresIframes);
+      const cur = document.getElementById('presCurrentWrap');
+      const nxt = document.getElementById('presNextWrap');
+      if (cur) ro.observe(cur);
+      if (nxt) ro.observe(nxt);
+    }
+    window.addEventListener('resize', scaleAllPresIframes);
+  }
+
+  function initPresDivider() {
+    const divider = document.getElementById('presDivider');
+    const main = document.querySelector('.pres-main');
+    if (!divider || !main) return;
+
+    // Restore saved position
+    const saved = localStorage.getItem('pres-divider-ratio');
+    if (saved) {
+      const r = parseFloat(saved);
+      if (r > 0.2 && r < 0.9) {
+        main.style.gridTemplateColumns = r + 'fr 6px ' + (1 - r) + 'fr';
+      }
+    }
+
+    let dragging = false;
+
+    divider.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      divider.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      // Prevent iframes from swallowing events during drag
+      document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none');
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = main.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const ratio = Math.min(0.85, Math.max(0.25, x / rect.width));
+      main.style.gridTemplateColumns = ratio + 'fr 6px ' + (1 - ratio) + 'fr';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      divider.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = '');
+      // Save position
+      const cols = main.style.gridTemplateColumns;
+      const match = cols.match(/([\d.]+)fr/);
+      if (match) localStorage.setItem('pres-divider-ratio', match[1]);
+    });
+
+    // Double-click to reset
+    divider.addEventListener('dblclick', () => {
+      main.style.gridTemplateColumns = '1.2fr 6px 0.8fr';
+      localStorage.removeItem('pres-divider-ratio');
+    });
+  }
+
+  function setupPresenterIframe(frame) {
+    try {
+      const iDoc = frame.contentDocument || frame.contentWindow.document;
+      presIframeSlides = [...iDoc.querySelectorAll('section.slide')];
+      if (presIframeSlides.length === 0) {
+        presIframeSlides = [...iDoc.querySelectorAll('[class*="slide"]')].filter(el =>
+          (el.tagName === 'SECTION' || el.tagName === 'DIV') &&
+          !el.classList.contains('slide-counter') &&
+          !el.classList.contains('slide-nav')
+        );
+      }
+      presIframeReady = true;
+
+      // Hide the deck's own nav chrome in presenter iframe
+      const ownCounter = iDoc.querySelector('.slide-counter');
+      if (ownCounter) ownCounter.style.display = 'none';
+
+      // Sync click events to the other window (so Play/Pause/Reset stay in sync)
+      iDoc.addEventListener('click', (e) => {
+        if (programmaticClick) return;
+        const vw = iDoc.documentElement.clientWidth || 1;
+        const vh = iDoc.documentElement.clientHeight || 1;
+        syncOther({
+          type: 'click-sync',
+          selector: getElementPath(e.target),
+          nx: e.clientX / vw,
+          ny: e.clientY / vh,
+        });
+      }, true);
+    } catch (err) {
+      console.warn('Could not access presenter iframe:', err);
+    }
+  }
+
+  function navigatePresenterIframe(idx) {
+    if (!presIframeReady || !presIframeSlides[idx]) return;
+    presIframeSlides[idx].scrollIntoView({ behavior: 'instant' });
+  }
+
+  function updatePresenter() {
+    // Scroll the full-HTML current slide iframe (preserves animations)
+    navigatePresenterIframe(index);
+    // Update everything else
+    updatePresenterMeta();
+  }
+
+  function updatePresenterMeta() {
+    const nxt = document.getElementById('presNext');
+    const notes = document.getElementById('presNotes');
+    const slideNum = document.getElementById('presSlideNum');
+    const anno = document.getElementById('presAnnotation');
+
+    // Next slide uses static preview (visual only, that's fine)
+    if (nxt) {
+      nxt.srcdoc = slides[index + 1]?.html ||
+        '<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;color:#555;font-family:Inter,sans-serif;font-size:1.5rem;">End of presentation</body></html>';
+      nxt.onload = () => scalePresIframe('presNextWrap');
+    }
+    if (notes) notes.textContent = slides[index]?.notes || 'No notes for this slide.';
+    if (slideNum) slideNum.textContent = (index + 1) + ' / ' + slides.length;
+    if (anno) anno.value = loadAnnotation();
+
+    document.querySelectorAll('.pres-thumb').forEach((t, i) => {
+      t.classList.toggle('active', i === index);
+    });
+    const activeThumb = document.querySelector('.pres-thumb.active');
+    if (activeThumb) activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
+  function buildThumbnails() {
+    const strip = document.getElementById('presThumbStrip');
+    if (!strip) return;
+    strip.innerHTML = '';
+    slides.forEach((s, i) => {
+      const div = document.createElement('div');
+      div.className = 'pres-thumb' + (i === index ? ' active' : '');
+      div.title = s.title;
+      div.addEventListener('click', () => goTo(i));
+
+      const frame = document.createElement('iframe');
+      frame.sandbox = 'allow-scripts allow-same-origin';
+      frame.srcdoc = s.html;
+      frame.tabIndex = -1;
+      div.appendChild(frame);
+
+      const num = document.createElement('div');
+      num.className = 'pres-thumb-num';
+      num.textContent = i + 1;
+      div.appendChild(num);
+
+      strip.appendChild(div);
+    });
+  }
+
+  // ── Timers ─────────────────────────────────────────────────
+  function updateTimers() {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const slideElapsed = Math.floor((Date.now() - slideStartTime) / 1000);
+    const timerEl = document.getElementById('presTimer');
+    const slideTimerEl = document.getElementById('presSlideTimer');
+    const clockEl = document.getElementById('presClock');
+    if (timerEl) timerEl.textContent = fmtHMS(elapsed);
+    if (slideTimerEl) slideTimerEl.textContent = fmtMS(slideElapsed);
+    if (clockEl) clockEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function fmtHMS(s) {
+    return String(Math.floor(s/3600)).padStart(2,'0') + ':' +
+           String(Math.floor((s%3600)/60)).padStart(2,'0') + ':' +
+           String(s%60).padStart(2,'0');
+  }
+  function fmtMS(s) {
+    return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+  }
+
+  // ── Annotations ────────────────────────────────────────────
+  function saveAnnotation() {
+    const anno = document.getElementById('presAnnotation');
+    if (!anno || !deckKey) return;
+    const key = deckKey + '_slide_' + index;
+    if (anno.value.trim()) localStorage.setItem(key, anno.value);
+    else localStorage.removeItem(key);
+  }
+
+  function loadAnnotation() {
+    if (!deckKey) return '';
+    return localStorage.getItem(deckKey + '_slide_' + index) || '';
+  }
+
+  // ── Laser Pointer ──────────────────────────────────────────
+  function toggleLaser() {
+    laserOn = !laserOn;
+    const btn = document.getElementById('laserBtn');
+    if (btn) btn.classList.toggle('on', laserOn);
+
+    // Show/hide the transparent overlay that captures mouse events
+    // (iframes swallow mouse events, so we need the overlay to track)
+    const overlay = document.getElementById('laserOverlay');
+    if (overlay) overlay.style.display = laserOn ? 'block' : 'none';
+
+    syncOther({ type: 'laser', x: 0.5, y: 0.5, visible: false });
+    if (laserOn) initLaserTracking();
+  }
+
+  function initLaserTracking() {
+    const overlay = document.getElementById('laserOverlay');
+    if (!overlay || overlay._laserInit) return;
+    overlay._laserInit = true;
+
+    overlay.addEventListener('mousemove', (e) => {
+      if (!laserOn) return;
+      const rect = overlay.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+      syncOther({ type: 'laser', x, y, visible: true });
+    });
+    overlay.addEventListener('mouseleave', () => {
+      if (laserOn) syncOther({ type: 'laser', x: 0, y: 0, visible: false });
+    });
+  }
+
+  function showLaser(x, y, visible) {
+    const dot = document.getElementById('laserDot');
+    if (!dot) return;
+    if (!visible) { dot.style.display = 'none'; return; }
+    dot.style.display = 'block';
+    dot.style.left = (x * 100) + '%';
+    dot.style.top = (y * 100) + '%';
+  }
+
+  // ── Click Sync (replay interactions between windows) ───────
+  // Build a CSS selector path that uniquely identifies an element in its document.
+  // Used so both iframes can find the exact same element regardless of viewport size.
+  function getElementPath(el) {
+    if (!el || el.nodeType !== 1) return null;
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts = [];
+    let cur = el;
+    while (cur && cur.nodeType === 1 && cur !== cur.ownerDocument.documentElement) {
+      let seg = cur.tagName.toLowerCase();
+      if (cur.id) {
+        parts.unshift('#' + CSS.escape(cur.id));
+        break;
+      }
+      const parent = cur.parentElement;
+      if (parent) {
+        const sameTag = [...parent.children].filter(c => c.tagName === cur.tagName);
+        if (sameTag.length > 1) seg += ':nth-of-type(' + (sameTag.indexOf(cur) + 1) + ')';
+      }
+      parts.unshift(seg);
+      cur = cur.parentElement;
+    }
+    return parts.join(' > ') || null;
+  }
+
+  function replayClick(selector, nx, ny) {
+    const frame = (isPresenter || isPresenterMode)
+      ? document.getElementById('presCurrent')
+      : document.getElementById('mainFrame');
+    if (!frame) return;
+    try {
+      const iDoc = frame.contentDocument || frame.contentWindow.document;
+      // Try selector first (reliable across different iframe sizes)
+      let target = null;
+      if (selector) {
+        try { target = iDoc.querySelector(selector); } catch (_) {}
+      }
+      // Fall back to coordinate mapping
+      if (!target && nx != null && ny != null) {
+        const x = nx * (iDoc.documentElement.clientWidth || 1);
+        const y = ny * (iDoc.documentElement.clientHeight || 1);
+        target = iDoc.elementFromPoint(x, y);
+      }
+      if (target) {
+        programmaticClick = true;
+        target.click();
+        setTimeout(() => { programmaticClick = false; }, 100);
+      }
+    } catch (err) {
+      console.warn('Click sync failed:', err);
+    }
+  }
+
+  // ── Bidirectional Sync ─────────────────────────────────────
+  function syncOther(msg) {
+    // postMessage to opener/children (in-browser P-key mode)
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage(msg, '*');
+    }
+    if (presenterWindow && !presenterWindow.closed) {
+      presenterWindow.postMessage(msg, '*');
+    }
+    if (displayWindow && !displayWindow.closed) {
+      displayWindow.postMessage(msg, '*');
+    }
+    // BroadcastChannel for shell-launched mode (independent --app windows)
+    if (syncChannel) {
+      syncChannel.postMessage(msg);
+    }
+  }
+
+  function onMessage(e) {
+    if (!e.data || !e.data.type) return;
+    const msg = e.data;
+
+    if (msg.type === 'goto') {
+      saveAnnotation();
+      index = msg.index;
+      slideStartTime = Date.now();
+      blackout = false;
+      navigateIframe(index);
+      updateUI();
+      if (isPresenter || isPresenterMode) updatePresenter();
+    }
+    else if (msg.type === 'blackout') {
+      blackout = msg.active;
+      updateUI();
+      const btn = document.getElementById('blackoutBtn');
+      if (btn) btn.classList.toggle('on', blackout);
+      const bb = document.getElementById('btnBlackout');
+      if (bb) bb.classList.toggle('on', blackout);
+    }
+    else if (msg.type === 'laser') {
+      showLaser(msg.x, msg.y, msg.visible);
+    }
+    else if (msg.type === 'click-sync') {
+      replayClick(msg.selector, msg.nx, msg.ny);
+    }
+    else if (msg.type === 'maximize') {
+      window.moveTo(0, 0);
+      window.resizeTo(screen.availWidth, screen.availHeight);
+    }
+    else if (msg.type === 'slides-data') {
+      slides = msg.slides;
+      fullHTML = msg.fullHTML || '';
+      deckKey = msg.deckKey;
+      startTime = msg.startTime;
+      slideStartTime = Date.now();
+      index = msg.index || 0;
+      if (isDisplay) {
+        // Mac: audience popup — show main display and try to position on external screen
+        startPresentation();
+        tryPositionOnExternal();
+        showDisplayHint();
+      } else {
+        initPresenter();
+      }
+    }
+  }
+
+  window.addEventListener('message', onMessage);
+
+  // ── Open Presenter ─────────────────────────────────────────
+  function openPresenter() {
+    if (isMac) {
+      openPresenterMac();
+    } else {
+      openPresenterDefault();
+    }
+  }
+
+  // Non-Mac: open presenter as popup (current behavior)
+  function openPresenterDefault() {
+    if (presenterWindow && !presenterWindow.closed) {
+      presenterWindow.focus();
+      return;
+    }
+    const url = new URL(location.href);
+    url.searchParams.set('mode', 'presenter');
+    presenterWindow = window.open(url.toString(), 'html-presenter', 'width=1400,height=900');
+
+    const sendData = () => {
+      if (presenterWindow && !presenterWindow.closed) {
+        presenterWindow.postMessage({
+          type: 'slides-data',
+          slides: slides,
+          fullHTML: fullHTML,
+          deckKey: deckKey,
+          startTime: startTime,
+          index: index,
+        }, '*');
+      }
+    };
+    setTimeout(sendData, 500);
+    setTimeout(sendData, 1500);
+    setTimeout(sendData, 3000);
+  }
+
+  // Mac: pop out audience display, switch this window to presenter
+  function openPresenterMac() {
+    if (displayWindow && !displayWindow.closed) {
+      displayWindow.focus();
+      return;
+    }
+
+    const url = new URL(location.href);
+    url.searchParams.set('mode', 'display');
+    const urlStr = url.toString();
+
+    // Try Window Management API to open fullscreen on external display
+    // (Chrome's fullscreen popup feature: left/top/width/height + fullscreen)
+    if ('getScreenDetails' in window) {
+      window.getScreenDetails().then(details => {
+        const ext = details.screens.find(s => !s.isPrimary);
+        if (ext) {
+          // Open directly fullscreen on external display (no macOS Space conflict)
+          displayWindow = window.open(urlStr, 'html-display',
+            'left=' + ext.left + ',top=' + ext.top +
+            ',width=' + ext.width + ',height=' + ext.height + ',fullscreen');
+        } else {
+          // No external display: open maximized popup on current screen
+          displayWindow = window.open(urlStr, 'html-display',
+            'popup,width=' + screen.availWidth + ',height=' + screen.availHeight);
+        }
+        sendSlidesData();
+      }).catch(() => {
+        // Permission denied or not supported: fallback to maximized popup
+        displayWindow = window.open(urlStr, 'html-display',
+          'popup,width=' + screen.availWidth + ',height=' + screen.availHeight);
+        sendSlidesData();
+      });
+    } else {
+      // No Window Management API: open maximized popup
+      displayWindow = window.open(urlStr, 'html-display',
+        'popup,width=' + screen.availWidth + ',height=' + screen.availHeight);
+      sendSlidesData();
+    }
+
+    function sendSlidesData() {
+      const send = () => {
+        if (displayWindow && !displayWindow.closed) {
+          displayWindow.postMessage({
+            type: 'slides-data',
+            slides: slides,
+            fullHTML: fullHTML,
+            deckKey: deckKey,
+            startTime: startTime,
+            index: index,
+          }, '*');
+        }
+      };
+      setTimeout(send, 500);
+      setTimeout(send, 1500);
+      setTimeout(send, 3000);
+    }
+
+    // Switch this window to presenter mode
+    isPresenterMode = true;
+    initPresenter();
+  }
+
+  // ── Keyboard ───────────────────────────────────────────────
+  function handleKeydown(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const key = e.key;
+
+    if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
+      e.preventDefault(); go(1);
+    }
+    else if (key === 'ArrowLeft' || key === 'PageUp') {
+      e.preventDefault(); go(-1);
+    }
+    else if (key === 'Home') { e.preventDefault(); goTo(0); }
+    else if (key === 'End') { e.preventDefault(); goTo(slides.length - 1); }
+    else if (key.toLowerCase() === 'f') toggleFullscreen();
+    else if (key.toLowerCase() === 'p' && !isPresenter && !isPresenterMode && !isDisplay) openPresenter();
+    else if (key.toLowerCase() === 'b') toggleBlackout();
+    else if (key.toLowerCase() === 'l' && (isPresenter || isPresenterMode)) toggleLaser();
+    else if (key.toLowerCase() === 'g' && (isPresenter || isPresenterMode)) {
+      e.preventDefault();
+      document.getElementById('gotoInput')?.focus();
+    }
+    else if (key === '?') toggleHelp();
+    else if (key === 'Escape') {
+      const help = document.getElementById('helpOverlay');
+      if (help?.classList.contains('show')) help.classList.remove('show');
+      else if (document.fullscreenElement) document.exitFullscreen?.();
+    }
+  }
+
+  document.addEventListener('keydown', handleKeydown);
+
+  // Touch support
+  let touchX = null;
+  document.addEventListener('touchstart', (e) => { touchX = e.changedTouches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  // ── BroadcastChannel listener (shell-launched mode) ───────
+  // In shell mode (two independent --app windows), there's no opener/child
+  // relationship, so postMessage can't reach the other window.
+  // BroadcastChannel bridges them. Only listen when no opener exists
+  // (avoids duplicate messages in P-key mode where postMessage works).
+  if (syncChannel && !window.opener) {
+    syncChannel.onmessage = (e) => {
+      if (!e.data || !e.data.type) return;
+      // Skip slides-data on BroadcastChannel (each window loads its own deck)
+      if (e.data.type === 'slides-data') return;
+      onMessage(e);
+    };
+  }
+
+  // ── Startup ───────────────────────────────────────────────
+  // Hide landing for popup windows (they receive data via postMessage)
+  if (isPresenter || isDisplay) {
+    landing.style.display = 'none';
+  }
+
+  // Auto-load deck from ?deck= URL parameter (shell-launched mode)
+  // Uses XMLHttpRequest because fetch() doesn't support file:// URLs in Chrome.
+  if (deckParam) {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => {
+      fullHTML = xhr.responseText;
+      deckKey = 'presenter_' + deckParam.split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
+      extractSlideMetadata(fullHTML);
+      if (slides.length === 0) {
+        alert('No slides found. Expected <section class="slide"> elements.');
+        return;
+      }
+      startPresentation();
+      if (isPresenter) {
+        isPresenterMode = true;
+        initPresenter();
+      }
+      if (isDisplay) {
+        window.moveTo(0, 0);
+        window.resizeTo(screen.availWidth, screen.availHeight);
+      }
+    };
+    xhr.onerror = () => {
+      console.error('Failed to load deck:', deckParam);
+      alert('Failed to load deck. Make sure Chrome was launched with --allow-file-access-from-files');
+    };
+    xhr.open('GET', deckParam);
+    xhr.send();
+  }
+
+})();
+</script>
+</body>
+</html>

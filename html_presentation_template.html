@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTML Presentation Template</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #111831;
+      --text: #eef3ff;
+      --muted: #a9b7d9;
+      --accent: #6ea8fe;
+      --accent2: #8ef0c2;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    body.presenter-view {
+      overflow: auto;
+      background: #0a0a0a;
+    }
+    .deck {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .slide {
+      width: 100vw;
+      height: 100vh;
+      display: none;
+      padding: 6vh 7vw;
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top right, rgba(110,168,254,0.18), transparent 30%),
+        radial-gradient(circle at bottom left, rgba(142,240,194,0.12), transparent 28%),
+        linear-gradient(180deg, #101933 0%, #0b1020 100%);
+    }
+    .slide.active { display: block; }
+    .eyebrow {
+      color: var(--accent2);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+    h1 { font-size: clamp(2.5rem, 5vw, 4.8rem); margin: 0 0 1rem; }
+    h2 { font-size: clamp(2rem, 4vw, 3.4rem); margin: 0 0 1rem; }
+    p, li { font-size: clamp(1.15rem, 2vw, 1.7rem); line-height: 1.45; color: var(--text); }
+    .muted { color: var(--muted); }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 3vw;
+      align-items: center;
+      height: 78vh;
+    }
+    .panel {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .code {
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 1rem;
+      color: #d9e8ff;
+    }
+    iframe.demo {
+      width: 100%;
+      height: 62vh;
+      border: 0;
+      border-radius: 18px;
+      background: white;
+    }
+    .footer {
+      position: absolute;
+      bottom: 2.1vh;
+      left: 7vw;
+      right: 7vw;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+    .progress-wrap {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 6px;
+      background: rgba(255,255,255,0.08);
+    }
+    .progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.2s ease;
+    }
+    .help {
+      position: absolute;
+      top: 2vh;
+      right: 2vw;
+      font-size: 0.95rem;
+      color: var(--muted);
+      background: rgba(0,0,0,0.28);
+      padding: 0.6rem 0.8rem;
+      border-radius: 999px;
+    }
+
+    /* Presenter view */
+    .presenter-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .presenter-pane {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 18px;
+      padding: 12px;
+    }
+    .presenter-pane h3 {
+      margin: 0 0 10px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .presenter-current {
+      aspect-ratio: 16 / 9;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      background: #000;
+    }
+    .presenter-next {
+      aspect-ratio: 16 / 9;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      background: #000;
+    }
+    .notes {
+      color: #ddd;
+      font-size: 1rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .meta {
+      color: #aaa;
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+    kbd {
+      background: #222;
+      border: 1px solid #444;
+      padding: 0.12rem 0.42rem;
+      border-radius: 6px;
+      font-family: inherit;
+      color: #fff;
+    }
+    @media (max-width: 900px) {
+      .two-col, .presenter-grid { grid-template-columns: 1fr; }
+      iframe.demo { height: 40vh; }
+    }
+  </style>
+</head>
+<body>
+  <div id="deck" class="deck">
+    <div class="help">Keys: ← → Home End F P B</div>
+
+    <section class="slide active" data-title="Title" data-notes="Welcome slide. Give a 20-second overview of the problem, the audience, and the outcome.">
+      <div class="eyebrow">HTML on Extended Screen</div>
+      <h1>Present HTML Like PowerPoint</h1>
+      <p class="muted">A self-contained presentation file you can open in Chrome and run on a projector or second monitor.</p>
+      <div class="panel" style="margin-top:2rem; max-width: 58rem;">
+        <p><strong>Use case:</strong> present technical dashboards, simulations, videos, and live HTML apps without converting everything to PPT.</p>
+      </div>
+      <div class="footer">
+        <div>Demo deck</div>
+        <div>1 / 4</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Why HTML" data-notes="Emphasize that HTML is stronger than PPT for live demos, data, code, and embedded tools.">
+      <div class="eyebrow">Why this approach</div>
+      <div class="two-col">
+        <div>
+          <h2>Why use HTML instead of PPT?</h2>
+          <ul>
+            <li>Embed live dashboards and calculators</li>
+            <li>Display code, equations, and web content</li>
+            <li>Use a clicker or keyboard for navigation</li>
+            <li>Keep one portable file for local presenting</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="code">Keyboard shortcuts
+
+← / →   previous / next
+Home    first slide
+End     last slide
+F       fullscreen
+P       presenter view
+B       black screen</div>
+        </div>
+      </div>
+      <div class="footer">
+        <div>Benefits</div>
+        <div>2 / 4</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Embedded HTML App" data-notes="This is where you embed one of your own HTML tools. Replace the iframe srcdoc or src with your local app.">
+      <div class="eyebrow">Embedded app</div>
+      <h2>Live HTML inside a slide</h2>
+      <iframe class="demo" title="embedded-demo" srcdoc="<!doctype html><html><head><style>body{font-family:Arial;margin:0;padding:24px;background:#f7f9fc}h3{margin-top:0} .card{background:white;border:1px solid #dfe6f2;border-radius:16px;padding:16px;max-width:720px} input{padding:10px 12px;font-size:16px;width:140px} button{padding:10px 12px;font-size:16px} .out{margin-top:12px;font-size:20px;color:#16355c}</style></head><body><div class='card'><h3>Embedded HTML widget</h3><p>This is just a placeholder demo.</p><input id='a' type='number' value='21'/> <button onclick='o.textContent=`Double = ${Number(a.value)*2}`'>Compute</button><div id='o' class='out'></div></div></body></html>"></iframe>
+      <p class="muted">Replace <code>srcdoc</code> with <code>src=&quot;your_tool.html&quot;</code> to embed a real app.</p>
+      <div class="footer">
+        <div>Interactive content</div>
+        <div>3 / 4</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="How to Use" data-notes="Walk through projector workflow: duplicate file, drag to screen, fullscreen, then open presenter view on laptop.">
+      <div class="eyebrow">Workflow</div>
+      <h2>How to present on an extended screen</h2>
+      <ol>
+        <li>Open this HTML file in Chrome.</li>
+        <li>Drag the window to the projector or second monitor.</li>
+        <li>Press <kbd>F</kbd> for fullscreen on that screen.</li>
+        <li>Press <kbd>P</kbd> to open presenter view on your laptop.</li>
+        <li>Use arrow keys or a clicker to move through slides.</li>
+      </ol>
+      <div class="panel">
+        <p><strong>Tip:</strong> You can duplicate this file and create one deck per talk. Replace the sample slides with your own content or embed your local HTML dashboards.</p>
+      </div>
+      <div class="footer">
+        <div>Setup</div>
+        <div>4 / 4</div>
+      </div>
+    </section>
+
+    <div class="progress-wrap"><div id="progress" class="progress"></div></div>
+  </div>
+
+  <script>
+    const slides = [...document.querySelectorAll('.slide')];
+    let index = 0;
+    let blackout = false;
+    let presenterWindow = null;
+
+    function qsParam(name) {
+      const u = new URL(window.location.href);
+      return u.searchParams.get(name);
+    }
+
+    function renderPresenterPage() {
+      document.body.classList.add('presenter-view');
+      const root = document.getElementById('deck');
+      root.innerHTML = `
+        <div class="presenter-grid">
+          <div class="presenter-pane">
+            <h3>Current Slide</h3>
+            <iframe class="presenter-current" id="currentFrame"></iframe>
+            <div class="meta" id="meta"></div>
+          </div>
+          <div>
+            <div class="presenter-pane" style="margin-bottom:16px;">
+              <h3>Next Slide</h3>
+              <iframe class="presenter-next" id="nextFrame"></iframe>
+            </div>
+            <div class="presenter-pane">
+              <h3>Notes</h3>
+              <div class="notes" id="notes"></div>
+            </div>
+          </div>
+        </div>`;
+      syncPresenter();
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'slide-update') syncPresenter(e.data.index);
+      });
+      return;
+    }
+
+    function slideHtmlFor(i) {
+      if (i < 0 || i >= slides.length) return '<html><body style="margin:0;background:#000"></body></html>';
+      const clone = slides[i].cloneNode(true);
+      clone.style.display = 'block';
+      clone.style.position = 'static';
+      clone.style.width = '100vw';
+      clone.style.height = '100vh';
+      return `<!doctype html><html><head><meta charset="utf-8">${document.head.innerHTML}</head><body>${clone.outerHTML}</body></html>`;
+    }
+
+    function syncPresenter(forcedIndex = index) {
+      const currentFrame = document.getElementById('currentFrame');
+      const nextFrame = document.getElementById('nextFrame');
+      const notes = document.getElementById('notes');
+      const meta = document.getElementById('meta');
+      if (!currentFrame) return;
+      currentFrame.srcdoc = slideHtmlFor(forcedIndex);
+      nextFrame.srcdoc = slideHtmlFor(forcedIndex + 1);
+      notes.textContent = slides[forcedIndex]?.dataset.notes || 'No notes for this slide.';
+      meta.innerHTML = `Slide ${forcedIndex + 1} of ${slides.length}<br>${slides[forcedIndex]?.dataset.title || ''}`;
+    }
+
+    if (qsParam('presenter') === '1') {
+      renderPresenterPage();
+    } else {
+      function update() {
+        slides.forEach((s, i) => s.classList.toggle('active', i === index && !blackout));
+        document.body.style.background = blackout ? '#000' : 'var(--bg)';
+        document.querySelectorAll('.footer').forEach((f, i) => {
+          const counter = f.querySelector('div:last-child');
+          if (counter) counter.textContent = `${i + 1} / ${slides.length}`;
+        });
+        const pct = ((index + 1) / slides.length) * 100;
+        document.getElementById('progress').style.width = pct + '%';
+        if (presenterWindow && !presenterWindow.closed) {
+          presenterWindow.postMessage({ type: 'slide-update', index }, '*');
+        }
+      }
+
+      function go(delta) {
+        blackout = false;
+        index = Math.max(0, Math.min(slides.length - 1, index + delta));
+        update();
+      }
+
+      function openPresenter() {
+        const url = new URL(window.location.href);
+        url.searchParams.set('presenter', '1');
+        presenterWindow = window.open(url.toString(), 'presenter-view', 'width=1400,height=900');
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') go(1);
+        else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(-1);
+        else if (e.key === 'Home') { index = 0; blackout = false; update(); }
+        else if (e.key === 'End') { index = slides.length - 1; blackout = false; update(); }
+        else if (e.key.toLowerCase() === 'f') {
+          if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+          else document.exitFullscreen();
+        }
+        else if (e.key.toLowerCase() === 'p') openPresenter();
+        else if (e.key.toLowerCase() === 'b') { blackout = !blackout; update(); }
+      });
+
+      let touchX = null;
+      document.addEventListener('touchstart', (e) => { touchX = e.changedTouches[0].clientX; }, { passive: true });
+      document.addEventListener('touchend', (e) => {
+        const dx = e.changedTouches[0].clientX - touchX;
+        if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+      }, { passive: true });
+
+      update();
+    }
+  </script>
+</body>
+</html>
